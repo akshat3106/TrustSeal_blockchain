@@ -3,7 +3,8 @@ import { ethers } from "ethers";
 import { contract } from "./config.js";
 import { buildMerkleTree } from "./merkle.js";
 
-export async function anchorShipment({
+
+export async function Snapshot({
   shipmentId,
   legNumber,
   receiverWallet,
@@ -14,13 +15,10 @@ export async function anchorShipment({
     throw new Error("No sensor logs provided");
   }
 
-  // ---------------- 1️⃣ Build Merkle Root ----------------
-  const tree = buildMerkleTree(sensorLogs); 
+  const tree = buildMerkleTree(sensorLogs);
   const merkleRoot = tree.getHexRoot();
-
   const timestamp = Math.floor(Date.now() / 1000);
 
-  // ---------------- 2️⃣ Build Snapshot JSON ----------------
   const snapshot = {
     shipmentId,
     legNumber,
@@ -30,26 +28,61 @@ export async function anchorShipment({
     sensorLogs
   };
 
-  // ---------------- 3️⃣ Upload Snapshot to IPFS (Pinata) ----------------
   const pinataResponse = await axios.post(
     "https://api.pinata.cloud/pinning/pinJSONToIPFS",
     snapshot,
     {
-      headers: {            
+      headers: {
         pinata_api_key: process.env.PINATA_API_KEY,
-        pinata_secret_api_key: process.env.PINATA_SECRET_API_KEY
+        pinata_secret_api_key: process.env.PINATA_SECRET_API_KEY,
+        "Content-Type": "application/json"
       }
     }
   );
 
   const cid = pinataResponse.data.IpfsHash;
 
-  // ---------------- 4️⃣ Build Commitment ----------------
+  return {
+    shipmentId,
+    legNumber,
+    receiverWallet,
+    timestamp,
+    merkleRoot,
+    cid
+  };
+}
+
+export async function Blockchain({ cid }) {
+
+  // Fetch snapshot from IPFS
+  const response = await axios.get(
+    `https://gateway.pinata.cloud/ipfs/${cid}`
+  );
+
+  const snapshot = response.data;
+
+  const {
+    shipmentId,
+    legNumber,
+    receiverWallet,
+    timestamp,
+    merkleRoot,
+    sensorLogs
+  } = snapshot;
+
+
+  const tree = buildMerkleTree(sensorLogs);
+  const recomputedRoot = tree.getHexRoot();
+
+  if (recomputedRoot !== merkleRoot) {
+    throw new Error("Merkle root mismatch. Snapshot tampered.");
+  }
+
+
   const shipmentBytes = ethers.keccak256(
     ethers.toUtf8Bytes(shipmentId)
   );
 
-  // Convert CID to fixed bytes32
   const cidBytes = ethers.keccak256(
     ethers.toUtf8Bytes(cid)
   );
@@ -68,17 +101,13 @@ export async function anchorShipment({
     )
   );
 
-  // ---------------- 5️⃣ Anchor on Blockchain ----------------
   const tx = await contract.commitCustody(commitment);
   const receipt = await tx.wait();
 
   return {
     shipmentId,
-    legNumber,
-    receiverWallet,
-    timestamp,
-    merkleRoot,
     cid,
+    merkleRoot,
     commitment,
     txHash: tx.hash,
     blockNumber: receipt.blockNumber

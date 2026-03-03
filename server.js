@@ -7,7 +7,7 @@ dotenv.config();
 const app = express();
 app.use(express.json());
 
-app.use(anchorRoutes);
+app.use("/api/v1", anchorRoutes);
 
 const PORT = process.env.PORT || 8000;
 
