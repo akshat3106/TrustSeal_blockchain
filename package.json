@@ -1,0 +1,20 @@
+{
+  "name": "blockchain_trustseal",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "ethers": "^6.16.0",
+    "express": "^5.2.1",
+    "keccak256": "^1.0.6",
+    "merkletreejs": "^0.6.0"
+  }
+}
